@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TweetFlux</title>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/handlebars.js/1.1.2/handlebars.min.js"></script>
+    <script src="//netdna.bootstrapcdn.com/bootstrap/3.0.2/js/bootstrap.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/scripts/jquery.tweet-linkify.js"></script>
+
+    <link href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+      a:hover {
+        text-decoration: none;
+      }
+
+      h1 {
+        text-align: center;
+      }
+
+      .search-term, .hashtag {
+        font-size: 20px;
+        text-align: center;
+      }
+
+      .pause:before {
+        content: '\e073';
+      }
+
+      .paused:before {
+        content: '\e072';
+      }
+
+      .tweets:empty {
+        min-height: 250px;
+        background: url('images/waiting.png') no-repeat center;
+      }
+
+      .tweets .col-md-3 {
+        padding: 5px;
+      }
+
+      .tweet {
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+        height: 170px;
+        font-size: 12px;
+      }
+
+      .tweet .img-thumbnail {
+        margin: 0 5px 0 0;
+      }
+
+      .tweet .row {
+        margin: 0;
+      }
+
+      .tweet .row.body {
+        border-top: 1px solid #ddd;
+        margin-top: 5px;
+        padding: 5px;
+      }
+
+      .tweet .text {
+        overflow-wrap: break-word;
+        text-overflow: ellipsis;
+      }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <h1 class='col-md-12'>
+        <i class='glyphicon pause'></i>
+        TweetFlux
+        <a class='download glyphicon glyphicon-cloud-download' href='https://github.com/ccashwell/tweet-flux-node'></a>
+      </h1>
+      <div class='col-md-12 search-term'>
+        <input class='hashtag' value='#redis'>
+      </div>
+      <hr class='col-md-12' />
+      <div class='container tweets'></div>
+    </div>
+
+    <script id='tweet-template' type='text/x-handlebars-template'>
+      <div class='col-md-3'>
+        <div class='tweet'>
+          <div class='row'>
+            <img class='img-thumbnail pull-left' src='{{user.image}}'>
+            <span class='user pull-right'>
+              {{user.name}}
+              <span>@{{user.handle}}</span>
+            </span>
+          </div>
+          <div class='row body'>
+            <p class='text'>{{text}}</p>
+          </div>
+        </div>
+      </div>
+    </script>
+
+    <script>
+    var paused = false;
+    var tweetQueue = [];
+
+    var getHashtag = function() {
+      hashtag = $('.hashtag').val();
+
+      try {
+        hashtag = hashtag.replace(/\W/g, '');
+      } catch (e) {
+        hashtag = 'redis';
+      }
+
+      return '#' + hashtag;
+    };
+
+    var addTweet = function(tweet) {
+      var template = Handlebars.compile($('#tweet-template').html());
+      var html = template(tweet);
+      tweetQueue.push(html);
+      processQueue();
+    }
+
+    var processQueue = function() {
+      while (!paused && tweetQueue.length > 0) {
+        tweet = $(tweetQueue.shift());
+        $('.user, .text', tweet).tweetLinkify();
+        $('.tweets').prepend(tweet);
+      }
+    }
+
+    var socket = io.connect();
+
+    socket.emit('init', { hashtag: getHashtag() });
+
+    socket.on('init', function(data) {
+      $('.hashtag').val(data.hashtag);
+    });
+
+    socket.on('tweet', addTweet);
+
+    $('.hashtag').on('change', function() {
+      $('.tweets').empty();
+      socket.emit('init', {hashtag: getHashtag()});
+    });
+
+    $('.pause').on('click', function() {
+      paused = $('.pause').toggleClass('paused').hasClass('paused');
+      processQueue();
+    });
+    </script>
+  </body>
+</html>
